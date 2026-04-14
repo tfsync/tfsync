@@ -1,0 +1,16 @@
+domain: tfsync.io
+layout:
+- go.kubebuilder.io/v4
+projectName: tfsync
+repo: github.com/tfsync/tfsync
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: tfsync.io
+  group: tfsync
+  kind: Workspace
+  path: github.com/tfsync/tfsync/api/v1alpha1
+  version: v1alpha1
+version: "3"
