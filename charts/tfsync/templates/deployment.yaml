@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tfsync-controller
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "tfsync.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tfsync
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels: {{- include "tfsync.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.controller }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+      containers:
+        - name: manager
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --metrics-bind-address=:8080
+            - --health-probe-bind-address=:8081
+            {{- if .Values.leaderElection }}
+            - --leader-elect
+            {{- end }}
+          ports:
+            - {name: metrics, containerPort: 8080}
+            - {name: health, containerPort: 8081}
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 15
+          readinessProbe:
+            httpGet: {path: /readyz, port: health}
+            initialDelaySeconds: 5
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true

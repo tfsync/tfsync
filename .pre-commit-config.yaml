@@ -16,6 +16,8 @@ repos:
     hooks:
       - id: check-yaml
         args: ['--allow-multiple-documents']
+        # Helm templates contain Go template syntax ({{ }}) that isn't valid YAML.
+        exclude: '^charts/.*/templates/.*\.ya?ml$'
 
   # ── JSON ───────────────────────────────────────────────────────────────────
   - repo: https://github.com/pre-commit/pre-commit-hooks
