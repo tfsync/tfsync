@@ -18,9 +18,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	tfsyncv1alpha1 "github.com/tfsync/tfsync/api/v1alpha1"
 	"github.com/tfsync/tfsync/internal/git"
@@ -196,7 +195,11 @@ func (r *WorkspaceReconciler) fail(ctx context.Context, ws *tfsyncv1alpha1.Works
 	return ctrl.Result{RequeueAfter: time.Minute}, nil
 }
 
+// setPhase writes the phase + Ready condition to .status via a merge patch.
+// Patch avoids the resourceVersion conflicts we'd get from calling Update
+// twice within a single reconcile (e.g. Initializing → Failed).
 func (r *WorkspaceReconciler) setPhase(ctx context.Context, ws *tfsyncv1alpha1.Workspace, phase tfsyncv1alpha1.WorkspacePhase, reason, msg string) error {
+	patch := client.MergeFrom(ws.DeepCopy())
 	ws.Status.Phase = phase
 	ws.Status.ObservedGeneration = ws.Generation
 	meta.SetStatusCondition(&ws.Status.Conditions, metav1.Condition{
@@ -205,7 +208,7 @@ func (r *WorkspaceReconciler) setPhase(ctx context.Context, ws *tfsyncv1alpha1.W
 		Reason:  reason,
 		Message: msg,
 	})
-	return r.Status().Update(ctx, ws)
+	return r.Status().Patch(ctx, ws, patch)
 }
 
 func readyFromPhase(p tfsyncv1alpha1.WorkspacePhase) metav1.ConditionStatus {
@@ -256,22 +259,13 @@ func shortTS() string {
 }
 
 // SetupWithManager wires the reconciler into the manager and watches owned Jobs.
+// GenerationChangedPredicate on the Workspace avoids a reconcile storm where
+// our own status writes trigger watch events that trigger more status writes.
+// Owns(Job/ConfigMap) still fires on owned-resource changes via ownerRefs.
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&tfsyncv1alpha1.Workspace{}).
-		Owns(&batchv1.Job{}, builder.WithPredicates()).
+		For(&tfsyncv1alpha1.Workspace{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Owns(&batchv1.Job{}).
 		Owns(&corev1.ConfigMap{}).
-		Watches(
-			&batchv1.Job{},
-			handler.EnqueueRequestsFromMapFunc(jobToWorkspace),
-		).
 		Complete(r)
-}
-
-func jobToWorkspace(_ context.Context, obj client.Object) []reconcile.Request {
-	owner := obj.GetLabels()["tfsync.io/workspace"]
-	if owner == "" {
-		return nil
-	}
-	return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: obj.GetNamespace(), Name: owner}}}
 }
