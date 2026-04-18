@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	runnerImage     = "hashicorp/terraform:latest"
-	moduleMountPath = "/workspace"
-	containerName   = "terraform"
-	// labelsKey links ConfigMap + Job back to the owning Workspace.
-	labelOwner = "tfsync.io/workspace"
-	labelRunID = "tfsync.io/run-id"
+	runnerImage   = "hashicorp/terraform:latest"
+	workDir       = "/workspace" // writable emptyDir; terraform runs here
+	moduleSrcPath = "/module-src" // read-only ConfigMap mount
+	containerName = "terraform"
+	labelOwner    = "tfsync.io/workspace"
+	labelRunID    = "tfsync.io/run-id"
 )
 
 // JobSpec is the intent produced by BuildJob.
@@ -84,22 +84,30 @@ func BuildJob(o Options) JobSpec {
 					Containers: []corev1.Container{{
 						Name:       containerName,
 						Image:      runnerImage,
-						WorkingDir: moduleMountPath,
+						WorkingDir: workDir,
 						Command:    []string{"/bin/sh", "-c", script},
 						EnvFrom:    envFrom(ws),
-						VolumeMounts: []corev1.VolumeMount{{
-							Name:      "module",
-							MountPath: moduleMountPath,
-						}},
-					}},
-					Volumes: []corev1.Volume{{
-						Name: "module",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{Name: name},
-							},
+						VolumeMounts: []corev1.VolumeMount{
+							{Name: "workspace", MountPath: workDir},
+							{Name: "module", MountPath: moduleSrcPath, ReadOnly: true},
 						},
 					}},
+					Volumes: []corev1.Volume{
+						{
+							Name: "workspace",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: "module",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{Name: name},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -112,7 +120,7 @@ func BuildJob(o Options) JobSpec {
 // into the runner as environment variables. Nothing is echoed to logs.
 func envFrom(ws *tfsyncv1alpha1.Workspace) []corev1.EnvFromSource {
 	out := []corev1.EnvFromSource{}
-	if ws.Spec.Credentials.SecretRef != "" {
+	if ws.Spec.Credentials != nil && ws.Spec.Credentials.SecretRef != "" {
 		out = append(out, corev1.EnvFromSource{
 			SecretRef: &corev1.SecretEnvSource{
 				LocalObjectReference: corev1.LocalObjectReference{Name: ws.Spec.Credentials.SecretRef},
@@ -144,16 +152,17 @@ func ownerRef(ws *tfsyncv1alpha1.Workspace) metav1.OwnerReference {
 func ptr[T any](v T) *T { return &v }
 
 const initPlanScript = `set -eu
+cp -r /module-src/. .
 terraform init -input=false -no-color
 terraform plan -input=false -no-color -out=tfplan -detailed-exitcode
 ec=$?
 echo "TFSYNC_PLAN_EXIT=${ec}"
-# exit 0 = no changes, 2 = changes, 1 = error
 if [ "$ec" = "1" ]; then exit 1; fi
 exit 0
 `
 
 const initPlanApplyScript = `set -eu
+cp -r /module-src/. .
 terraform init -input=false -no-color
 terraform plan -input=false -no-color -out=tfplan -detailed-exitcode || ec=$?
 ec=${ec:-0}
