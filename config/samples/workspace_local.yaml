@@ -1,0 +1,14 @@
+apiVersion: tfsync.io/v1alpha1
+kind: Workspace
+metadata:
+  name: smoke-local
+  namespace: default
+spec:
+  source:
+    repo: https://github.com/tfsync/tfsync-smoke.git
+    branch: main
+  syncPolicy:
+    autoApply: true
+    interval: 5m
+  backend:
+    type: local
