@@ -46,7 +46,7 @@ spec:
             metadata: {type: object}
             spec:
               type: object
-              required: [source, backend, credentials]
+              required: [source, backend]
               properties:
                 source:
                   type: object
