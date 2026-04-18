@@ -62,7 +62,11 @@ func (in *WorkspaceSpec) DeepCopyInto(out *WorkspaceSpec) {
 	out.Source = in.Source
 	out.SyncPolicy = in.SyncPolicy
 	out.Backend = in.Backend
-	out.Credentials = in.Credentials
+	if in.Credentials != nil {
+		in, out := &in.Credentials, &out.Credentials
+		*out = new(CredentialsRef)
+		**out = **in
+	}
 }
 
 func (in *WorkspaceSpec) DeepCopy() *WorkspaceSpec {

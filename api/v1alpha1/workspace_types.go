@@ -65,10 +65,15 @@ type CredentialsRef struct {
 
 // WorkspaceSpec defines the desired state of a Terraform workspace.
 type WorkspaceSpec struct {
-	Source      GitSource      `json:"source"`
-	SyncPolicy  SyncPolicy     `json:"syncPolicy,omitempty"`
-	Backend     BackendConfig  `json:"backend"`
-	Credentials CredentialsRef `json:"credentials"`
+	Source     GitSource     `json:"source"`
+	SyncPolicy SyncPolicy    `json:"syncPolicy,omitempty"`
+	Backend    BackendConfig `json:"backend"`
+
+	// Credentials optionally projects cloud provider credentials into the
+	// runner Job. Omit for backends / modules that need none (e.g. the
+	// `local` backend with a `null_resource` module).
+	// +optional
+	Credentials *CredentialsRef `json:"credentials,omitempty"`
 }
 
 // WorkspaceStatus reports the observed state of a Workspace.
