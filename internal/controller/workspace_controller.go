@@ -55,6 +55,10 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Capture before any status mutations so all field changes made in this
+	// reconcile are included in setPhase's merge patch.
+	base := ws.DeepCopy()
+
 	interval := ws.Spec.SyncPolicy.Interval.Duration
 	if interval <= 0 {
 		interval = defaultInterval
@@ -82,7 +86,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	logger.Info("starting reconcile", "phase", ws.Status.Phase)
 
-	if err := r.setPhase(ctx, &ws, tfsyncv1alpha1.PhaseInitializing, "Cloning", "cloning git repo"); err != nil {
+	if err := r.setPhase(ctx, base, &ws, tfsyncv1alpha1.PhaseInitializing, "Cloning", "cloning git repo"); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -120,7 +124,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	ws.Status.ActiveJob = jobSpec.Job.Name
-	if err := r.setPhase(ctx, &ws, phase, "Running", fmt.Sprintf("runner job %s started", jobSpec.Job.Name)); err != nil {
+	if err := r.setPhase(ctx, base, &ws, phase, "Running", fmt.Sprintf("runner job %s started", jobSpec.Job.Name)); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -132,6 +136,8 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 // observeActiveJob inspects the named Job. Returns done=true when the Job
 // has succeeded or failed; writes terminal status back to the Workspace.
 func (r *WorkspaceReconciler) observeActiveJob(ctx context.Context, ws *tfsyncv1alpha1.Workspace) (bool, error) {
+	base := ws.DeepCopy()
+
 	var job batchv1.Job
 	key := types.NamespacedName{Namespace: ws.Namespace, Name: ws.Status.ActiveJob}
 	if err := r.Get(ctx, key, &job); err != nil {
@@ -158,13 +164,13 @@ func (r *WorkspaceReconciler) observeActiveJob(ctx context.Context, ws *tfsyncv1
 			phase = tfsyncv1alpha1.PhaseOutOfSync
 			msg = "plan completed; manual approval required"
 		}
-		return true, r.setPhase(ctx, ws, phase, "RunnerSucceeded", msg)
+		return true, r.setPhase(ctx, base, ws, phase, "RunnerSucceeded", msg)
 
 	case job.Status.Failed > 0:
 		logs := r.fetchJobLogs(ctx, &job)
 		ws.Status.LastPlanOutput = trim(logs, planOutputMax)
 		ws.Status.ActiveJob = ""
-		return true, r.setPhase(ctx, ws, tfsyncv1alpha1.PhaseFailed, "RunnerFailed", "runner job failed")
+		return true, r.setPhase(ctx, base, ws, tfsyncv1alpha1.PhaseFailed, "RunnerFailed", "runner job failed")
 	}
 
 	return false, nil
@@ -191,15 +197,15 @@ func (r *WorkspaceReconciler) fetchJobLogs(ctx context.Context, job *batchv1.Job
 }
 
 func (r *WorkspaceReconciler) fail(ctx context.Context, ws *tfsyncv1alpha1.Workspace, msg string) (ctrl.Result, error) {
-	_ = r.setPhase(ctx, ws, tfsyncv1alpha1.PhaseFailed, "Error", msg)
+	_ = r.setPhase(ctx, ws.DeepCopy(), ws, tfsyncv1alpha1.PhaseFailed, "Error", msg)
 	return ctrl.Result{RequeueAfter: time.Minute}, nil
 }
 
-// setPhase writes the phase + Ready condition to .status via a merge patch.
-// Patch avoids the resourceVersion conflicts we'd get from calling Update
-// twice within a single reconcile (e.g. Initializing → Failed).
-func (r *WorkspaceReconciler) setPhase(ctx context.Context, ws *tfsyncv1alpha1.Workspace, phase tfsyncv1alpha1.WorkspacePhase, reason, msg string) error {
-	patch := client.MergeFrom(ws.DeepCopy())
+// setPhase writes phase + Ready condition to .status via a merge patch.
+// base must be a DeepCopy of ws captured BEFORE any status mutations in the
+// current reconcile — that way all mutated fields are included in the patch.
+func (r *WorkspaceReconciler) setPhase(ctx context.Context, base, ws *tfsyncv1alpha1.Workspace, phase tfsyncv1alpha1.WorkspacePhase, reason, msg string) error {
+	patch := client.MergeFrom(base)
 	ws.Status.Phase = phase
 	ws.Status.ObservedGeneration = ws.Generation
 	meta.SetStatusCondition(&ws.Status.Conditions, metav1.Condition{
