@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	tfsyncv1alpha1 "github.com/tfsync/tfsync/api/v1alpha1"
-	"github.com/tfsync/tfsync/internal/git"
+	"github.com/tfsync/tfsync/internal/provider"
 	"github.com/tfsync/tfsync/internal/runner"
 )
 
@@ -36,7 +36,8 @@ const (
 // WorkspaceReconciler reconciles Workspace objects.
 type WorkspaceReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Registry *provider.Registry
 }
 
 // +kubebuilder:rbac:groups=tfsync.io,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
@@ -90,13 +91,20 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
+	gitProv, err := r.Registry.GitProviderFor(ws.Spec.Source.Repo)
+	if err != nil {
+		return r.fail(ctx, &ws, fmt.Sprintf("no git provider: %v", err))
+	}
+
 	cloneCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	res, err := git.Clone(cloneCtx, git.CloneOptions{
-		Repo:   ws.Spec.Source.Repo,
-		Branch: ws.Spec.Source.Branch,
-		Path:   ws.Spec.Source.Path,
-	})
+	res, err := gitProv.Clone(cloneCtx, provider.CloneRequest{
+		Repo:      ws.Spec.Source.Repo,
+		Branch:    ws.Spec.Source.Branch,
+		Path:      ws.Spec.Source.Path,
+		SecretRef: ws.Spec.Source.SecretRef,
+		Namespace: ws.Namespace,
+	}, r.Registry.SecretProvider)
 	if err != nil {
 		return r.fail(ctx, &ws, fmt.Sprintf("git clone failed: %v", err))
 	}

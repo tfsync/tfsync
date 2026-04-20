@@ -15,6 +15,10 @@ import (
 
 	tfsyncv1alpha1 "github.com/tfsync/tfsync/api/v1alpha1"
 	"github.com/tfsync/tfsync/internal/controller"
+	"github.com/tfsync/tfsync/internal/provider"
+	gitprovider    "github.com/tfsync/tfsync/internal/provider/git"
+	secretprovider "github.com/tfsync/tfsync/internal/provider/secret"
+	stateprovider  "github.com/tfsync/tfsync/internal/provider/state"
 )
 
 var scheme = runtime.NewScheme()
@@ -49,9 +53,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	reg := provider.NewRegistry(&secretprovider.K8sSecretProvider{Client: mgr.GetClient()})
+	reg.RegisterGit(gitprovider.HTTPSProvider{})
+	reg.RegisterGit(gitprovider.SSHProvider{})
+	reg.RegisterState(stateprovider.NewNoopBackend("local"))
+
 	if err = (&controller.WorkspaceReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Registry: reg,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog("unable to register Workspace controller", err)
 		os.Exit(1)

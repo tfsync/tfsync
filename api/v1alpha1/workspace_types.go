@@ -33,6 +33,14 @@ type GitSource struct {
 	// +kubebuilder:default=main
 	// +optional
 	Branch string `json:"branch,omitempty"`
+
+	// SecretRef is the name of a Secret in the same namespace that holds
+	// git authentication credentials. Required for private repositories.
+	// The Secret must contain a "token" key (HTTP password / PAT) and an
+	// optional "username" key (defaults to "git", accepted by GitHub,
+	// GitLab, Bitbucket, and most self-hosted servers).
+	// +optional
+	SecretRef string `json:"secretRef,omitempty"`
 }
 
 type SyncPolicy struct {
