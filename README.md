@@ -218,7 +218,7 @@ make run         # runs the controller locally against your current kubecontext
 make test
 ```
 
-> **Status:** Early alpha. Expect breaking changes until `v1beta1`.
+> **Status:** Early alpha (`v1alpha1`). The CRD API and controller behaviour may change between any release without a deprecation period. Pin to a specific version in production and review the changelog before upgrading. The API will stabilise at `v1beta1`.
 
 ---
 
