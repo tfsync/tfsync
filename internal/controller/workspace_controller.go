@@ -110,6 +110,26 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	defer os.RemoveAll(res.Dir)
 
+	// Inject backend.tf.json if the registered state backend generates one.
+	// This overwrites any backend.tf.json the user committed, so they don't
+	// need to store backend config in the repo.
+	if backend := r.Registry.StateBackendFor(string(ws.Spec.Backend.Type)); backend != nil {
+		var secretData map[string]string
+		if ws.Spec.Backend.SecretRef != "" {
+			secretData, err = r.Registry.SecretProvider.GetSecret(ctx, ws.Namespace, ws.Spec.Backend.SecretRef)
+			if err != nil {
+				return r.fail(ctx, &ws, fmt.Sprintf("fetch backend secret: %v", err))
+			}
+		}
+		backendConfig, err := backend.ConfigureBackendFile(ctx, secretData)
+		if err != nil {
+			return r.fail(ctx, &ws, fmt.Sprintf("configure backend: %v", err))
+		}
+		if backendConfig != "" {
+			res.Files["backend.tf.json"] = backendConfig
+		}
+	}
+
 	apply := ws.Spec.SyncPolicy.AutoApply
 	phase := tfsyncv1alpha1.PhasePlanning
 	if apply {

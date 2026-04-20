@@ -18,7 +18,7 @@ const (
 )
 
 // BackendType enumerates supported terraform remote state backends.
-// +kubebuilder:validation:Enum=s3;gcs;azurerm;local
+// +kubebuilder:validation:Enum=s3;gcs;azurerm;local;http
 type BackendType string
 
 type GitSource struct {

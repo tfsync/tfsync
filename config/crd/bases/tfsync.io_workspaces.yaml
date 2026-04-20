@@ -67,7 +67,7 @@ spec:
                   properties:
                     type:
                       type: string
-                      enum: [s3, gcs, azurerm, local]
+                      enum: [s3, gcs, azurerm, local, http]
                     secretRef: {type: string}
                 credentials:
                   type: object

@@ -57,6 +57,10 @@ func main() {
 	reg.RegisterGit(gitprovider.HTTPSProvider{})
 	reg.RegisterGit(gitprovider.SSHProvider{})
 	reg.RegisterState(stateprovider.NewNoopBackend("local"))
+	reg.RegisterState(stateprovider.S3Backend{})
+	reg.RegisterState(stateprovider.GCSBackend{})
+	reg.RegisterState(stateprovider.AzureRMBackend{})
+	reg.RegisterState(stateprovider.HTTPBackend{})
 
 	if err = (&controller.WorkspaceReconciler{
 		Client:   mgr.GetClient(),
