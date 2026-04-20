@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/tfsync/tfsync/compare/v0.3.0...v0.4.0) (2026-04-20)
+
+
+### Features
+
+* **provider:** implement S3 state backend; stub GCS, azurerm, HTTP ([a997e32](https://github.com/tfsync/tfsync/commit/a997e327fdbe12cf5b75918353a6ea62c49b3ab0))
+
 ## [0.3.0](https://github.com/tfsync/tfsync/compare/v0.2.0...v0.3.0) (2026-04-20)
 
 
