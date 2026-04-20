@@ -55,6 +55,7 @@ spec:
                     repo: {type: string}
                     path: {type: string}
                     branch: {type: string, default: main}
+                    secretRef: {type: string}
                 syncPolicy:
                   type: object
                   properties:
