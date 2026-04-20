@@ -1,0 +1,25 @@
+# Smoke test: private self-hosted GitLab/GHE repo (PAT auth) + local backend.
+# Use this to isolate and verify self-hosted git server auth without any cloud backend.
+# Works with any HTTPS git server: GitLab CE/EE, GitHub Enterprise, Gitea, Bitbucket Server.
+#
+# Secret required:
+#   kubectl create secret generic selfhosted-git-token \
+#     --from-literal=token=glpat-xxxx \
+#     --from-literal=username=oauth2 \
+#     -n default
+apiVersion: tfsync.io/v1alpha1
+kind: Workspace
+metadata:
+  name: smoke-selfhosted-local
+  namespace: default
+spec:
+  source:
+    repo: https://gitlab.mycompany.com/infra/tfsync-smoke.git
+    path: local
+    branch: main
+    secretRef: selfhosted-git-token
+  backend:
+    type: local
+  syncPolicy:
+    autoApply: true
+    interval: 5m

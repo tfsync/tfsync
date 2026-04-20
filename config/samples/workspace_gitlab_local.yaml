@@ -1,0 +1,24 @@
+# Smoke test: private GitLab.com repo (PAT auth) + local backend.
+# Use this to isolate and verify GitLab git auth without any cloud backend.
+#
+# Secret required:
+#   kubectl create secret generic gitlab-token \
+#     --from-literal=token=glpat-xxxx \
+#     --from-literal=username=oauth2 \
+#     -n default
+apiVersion: tfsync.io/v1alpha1
+kind: Workspace
+metadata:
+  name: smoke-gitlab-local
+  namespace: default
+spec:
+  source:
+    repo: https://gitlab.com/your-group/tfsync-smoke.git
+    path: local
+    branch: main
+    secretRef: gitlab-token
+  backend:
+    type: local
+  syncPolicy:
+    autoApply: true
+    interval: 5m

@@ -1,0 +1,40 @@
+# Smoke test: private GitLab.com repo (PAT auth) + S3 backend.
+#
+# Secrets required:
+#
+#   kubectl create secret generic gitlab-token \
+#     --from-literal=token=glpat-xxxx \
+#     --from-literal=username=oauth2 \
+#     -n default
+#
+#   kubectl create secret generic s3-backend-config \
+#     --from-literal=bucket=my-tf-state-bucket \
+#     --from-literal=key=tfsync-smoke/s3/terraform.tfstate \
+#     --from-literal=region=us-east-1 \
+#     --from-literal=dynamodb_table=tf-lock-table \
+#     -n default
+#
+#   kubectl create secret generic aws-creds \
+#     --from-literal=AWS_ACCESS_KEY_ID=AKIA... \
+#     --from-literal=AWS_SECRET_ACCESS_KEY=... \
+#     --from-literal=AWS_REGION=us-east-1 \
+#     -n default
+apiVersion: tfsync.io/v1alpha1
+kind: Workspace
+metadata:
+  name: smoke-gitlab-s3
+  namespace: default
+spec:
+  source:
+    repo: https://gitlab.com/your-group/tfsync-smoke.git
+    path: s3
+    branch: main
+    secretRef: gitlab-token
+  backend:
+    type: s3
+    secretRef: s3-backend-config
+  credentials:
+    secretRef: aws-creds
+  syncPolicy:
+    autoApply: true
+    interval: 5m

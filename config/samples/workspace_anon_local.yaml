@@ -1,0 +1,17 @@
+# Smoke test: public repo (no git auth) + local backend (no cloud creds).
+# Useful for verifying the controller is running with zero secrets required.
+apiVersion: tfsync.io/v1alpha1
+kind: Workspace
+metadata:
+  name: smoke-anon-local
+  namespace: default
+spec:
+  source:
+    repo: https://github.com/tfsync/tfsync-smoke.git
+    path: local
+    branch: main
+  backend:
+    type: local
+  syncPolicy:
+    autoApply: true
+    interval: 5m

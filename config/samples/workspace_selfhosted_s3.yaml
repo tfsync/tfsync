@@ -1,0 +1,41 @@
+# Smoke test: private self-hosted GitLab/GHE repo (PAT auth) + S3 backend.
+# Works with any HTTPS git server: GitLab CE/EE, GitHub Enterprise, Gitea, Bitbucket Server.
+#
+# Secrets required:
+#
+#   kubectl create secret generic selfhosted-git-token \
+#     --from-literal=token=glpat-xxxx \
+#     --from-literal=username=oauth2 \
+#     -n default
+#
+#   kubectl create secret generic s3-backend-config \
+#     --from-literal=bucket=my-tf-state-bucket \
+#     --from-literal=key=tfsync-smoke/s3/terraform.tfstate \
+#     --from-literal=region=us-east-1 \
+#     --from-literal=dynamodb_table=tf-lock-table \
+#     -n default
+#
+#   kubectl create secret generic aws-creds \
+#     --from-literal=AWS_ACCESS_KEY_ID=AKIA... \
+#     --from-literal=AWS_SECRET_ACCESS_KEY=... \
+#     --from-literal=AWS_REGION=us-east-1 \
+#     -n default
+apiVersion: tfsync.io/v1alpha1
+kind: Workspace
+metadata:
+  name: smoke-selfhosted-s3
+  namespace: default
+spec:
+  source:
+    repo: https://gitlab.mycompany.com/infra/tfsync-smoke.git
+    path: s3
+    branch: main
+    secretRef: selfhosted-git-token
+  backend:
+    type: s3
+    secretRef: s3-backend-config
+  credentials:
+    secretRef: aws-creds
+  syncPolicy:
+    autoApply: true
+    interval: 5m

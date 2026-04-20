@@ -1,0 +1,23 @@
+# Smoke test: private GitHub repo (PAT auth) + local backend.
+# Use this to isolate and verify GitHub git auth without any cloud backend.
+#
+# Secret required:
+#   kubectl create secret generic github-token \
+#     --from-literal=token=ghp_xxxx \
+#     -n default
+apiVersion: tfsync.io/v1alpha1
+kind: Workspace
+metadata:
+  name: smoke-github-local
+  namespace: default
+spec:
+  source:
+    repo: https://github.com/tfsync/tfsync-smoke.git
+    path: local
+    branch: main
+    secretRef: github-token
+  backend:
+    type: local
+  syncPolicy:
+    autoApply: true
+    interval: 5m
