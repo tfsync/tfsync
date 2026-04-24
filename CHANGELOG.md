@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/tfsync/tfsync/compare/v0.4.0...v0.5.0) (2026-04-24)
+
+
+### Features
+
+* **controller:** stream runner pod logs into status.lastPlanOutput ([77b767c](https://github.com/tfsync/tfsync/commit/77b767c5ce91ae0c87c0007cd92f061c4957676a))
+
+
+### Bug Fixes
+
+* **provider:** scope config map keys to path subdir, not clone root ([fa6a505](https://github.com/tfsync/tfsync/commit/fa6a505d307b2e146f1cdb3b77cdbac7c1e7f582))
+
 ## [0.4.0](https://github.com/tfsync/tfsync/compare/v0.3.0...v0.4.0) (2026-04-20)
 
 
