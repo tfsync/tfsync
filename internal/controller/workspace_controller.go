@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +39,9 @@ type WorkspaceReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Registry *provider.Registry
+	// Clientset is a direct (non-cached) kubernetes client used for subresources
+	// the controller-runtime cached client cannot serve — notably pods/log.
+	Clientset kubernetes.Interface
 }
 
 // +kubebuilder:rbac:groups=tfsync.io,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
@@ -46,6 +50,8 @@ type WorkspaceReconciler struct {
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=pods/log,verbs=get
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -204,10 +210,14 @@ func (r *WorkspaceReconciler) observeActiveJob(ctx context.Context, ws *tfsyncv1
 	return false, nil
 }
 
-// fetchJobLogs is a best-effort pull of the runner's stdout. The controller
-// cannot reach the pod log API via cached client; callers treat empty as "no output".
-// A production implementation would use a direct clientset here.
+// fetchJobLogs streams the runner pod's terraform container stdout using a
+// direct clientset (the cached controller-runtime client cannot serve
+// subresources like pods/log). Returns empty on any failure — callers treat
+// that as "no output" and rely on the Job.Status for success/failure signal.
 func (r *WorkspaceReconciler) fetchJobLogs(ctx context.Context, job *batchv1.Job) string {
+	if r.Clientset == nil {
+		return ""
+	}
 	var pods corev1.PodList
 	if err := r.List(ctx, &pods, client.InNamespace(job.Namespace), client.MatchingLabels{"job-name": job.Name}); err != nil {
 		return ""
@@ -215,13 +225,14 @@ func (r *WorkspaceReconciler) fetchJobLogs(ctx context.Context, job *batchv1.Job
 	if len(pods.Items) == 0 {
 		return ""
 	}
-	// Terminal message from the container is a cheap proxy without clientset wiring.
-	for _, s := range pods.Items[0].Status.ContainerStatuses {
-		if s.State.Terminated != nil && s.State.Terminated.Message != "" {
-			return s.State.Terminated.Message
-		}
+	req := r.Clientset.CoreV1().Pods(job.Namespace).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{
+		Container: "terraform",
+	})
+	out, err := req.DoRaw(ctx)
+	if err != nil {
+		return ""
 	}
-	return ""
+	return string(out)
 }
 
 func (r *WorkspaceReconciler) fail(ctx context.Context, ws *tfsyncv1alpha1.Workspace, msg string) (ctrl.Result, error) {

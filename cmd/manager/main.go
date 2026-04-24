@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -41,7 +42,8 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	cfg := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
@@ -50,6 +52,13 @@ func main() {
 	})
 	if err != nil {
 		setupLog("unable to start manager", err)
+		os.Exit(1)
+	}
+
+	// Direct clientset for subresources (pods/log) the cached client can't serve.
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		setupLog("unable to build clientset", err)
 		os.Exit(1)
 	}
 
@@ -63,9 +72,10 @@ func main() {
 	reg.RegisterState(stateprovider.HTTPBackend{})
 
 	if err = (&controller.WorkspaceReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Registry: reg,
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		Registry:  reg,
+		Clientset: clientset,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog("unable to register Workspace controller", err)
 		os.Exit(1)
