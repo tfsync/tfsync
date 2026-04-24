@@ -64,7 +64,7 @@ func (HTTPSProvider) Clone(ctx context.Context, req provider.CloneRequest, secre
 	}
 
 	root := filepath.Join(dir, filepath.Clean("/"+req.Path))
-	files, err := collectTerraform(root, dir)
+	files, err := collectTerraform(root, root)
 	if err != nil {
 		_ = os.RemoveAll(dir)
 		return nil, err
